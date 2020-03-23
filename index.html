@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>荣誉室计算器</title>
+  <!-- bootstrap -->
+  <link href="https://cdn.bootcss.com/twitter-bootstrap/3.4.1/css/bootstrap.min.css" rel="stylesheet">
+  <!-- jQuery -->
+  <script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script>
+  <!-- Bootstrap 插件 -->
+  <script src="https://cdn.bootcss.com/twitter-bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <style>
+    .legendary {
+      color: orange;
+    }
+
+    .epic {
+      color: purple;
+    }
+
+    .rare {
+      color: blue;
+    }
+
+    .common {
+      color: black;
+    }
+
+    .dust {
+      color: rgb(64, 173, 224);
+    }
+
+    .fold {
+      float: right;
+    }
+
+    .explain {
+      margin: 10px;
+    }
+
+    .explain p {
+      margin: 0;
+    }
+
+    .explain blockquote {
+      font-size: 14px;
+    }
+
+    #unlock-label {
+      display: inline;
+      float: right;
+      margin: 0 10px;
+    }
+
+    #unlock {
+      margin-left: 3px;
+    }
+
+    .detail {
+      width: 95%;
+      margin: 5px auto;
+    }
+
+    input[type="text"] {
+      text-align: center;
+    }
+
+    #priority {
+      font-weight: 700;
+    }
+
+    .sort-link {
+      float: right;
+      color: black;
+    }
+
+    .sort-link .disabled {
+      color: gray;
+    }
+
+    .sort-link span {
+      margin: auto 5px;
+    }
+
+    #calculate {
+      width: 50%;
+      margin-bottom: 5px;
+    }
+
+    #result th,
+    #result td {
+      text-align: center;
+    }
+
+    .tr-odd {
+      background-color: #f9f9f9;
+    }
+  </style>
+  <script>
+    function groupPack(V, c, w, s, moreItem = false) {
+      var n = c.length;
+      var dp = []; for (let i = 0; i < V + 1; i++) dp[i] = 0;
+      var ss = []; for (let i = 0; i < V + 1; i++) ss[i] = [];
+      for (let i = 1; i < n + 1; i++) {
+        var m = c[i - 1].length;
+        for (let v = V; v > 0; v--) {
+          for (let j = 1; j < m + 1; j++) {
+            if (c[i - 1][j - 1] <= v) {
+              var curCost = dp[v - c[i - 1][j - 1]] + w[i - 1][j - 1];
+              if (dp[v] < curCost) {
+                dp[v] = curCost;
+                ss[v] = ss[v - c[i - 1][j - 1]].concat([s[i - 1][j - 1]]);
+              } else if (moreItem && dp[v] === curCost && ss[v].length < ss[v - c[i - 1][j - 1]].length + 1) {
+                ss[v] = ss[v - c[i - 1][j - 1]].concat([s[i - 1][j - 1]]);
+              }
+            }
+          }
+        }
+      }
+      return [dp[V], ss[V]];
+    }
+    function maxDust(dust, HoF, have, priority = [0, 1, 2, 3], moreCard = false) {
+      // 金色传说, 传说, 金色史诗, 史诗, 金色稀有, 稀有, 金色普通, 普通
+      var cardw = [3200, 1600, 1600, 400, 800, 100, 400, 40];
+      var cardc = [1600, 400, 400, 100, 100, 20, 50, 5];
+      var V = dust + have.map((n, i) => n * cardc[i]).reduce((x, y) => x + y);
+      // 全部除以公因数5，降低V范围减少循环次数
+      cardw = cardw.map(n => n / 5);
+      cardc = cardc.map(n => n / 5);
+      V = parseInt(V / 5);
+      var w = [], c = [], s = [];
+      for (let index in priority) {
+        var i = priority[index];
+        for (let j = 0; j < HoF[i]; j++) w.push([cardw[2 * i], cardw[2 * i + 1]]);
+        for (let j = 0; j < HoF[i] - have[2 * i] - have[2 * i + 1]; j++) c.push([cardw[2 * i], cardw[2 * i + 1]]);
+        for (let j = 0; j < have[2 * i]; j++) c.push([cardc[2 * i], cardw[2 * i + 1]]);
+        for (let j = 0; j < have[2 * i + 1]; j++) c.push([cardw[2 * i], cardc[2 * i + 1]]);
+        for (let j = 0; j < HoF[i]; j++) s.push([2 * i, 2 * i + 1]);
+      }
+      var totalDust, cardIndex;
+      [totalDust, cardIndex] = groupPack(V, c, w, s, moreCard);
+      var totalCard = [0, 0, 0, 0, 0, 0, 0, 0];
+      for (let i in cardIndex) {
+        totalCard[cardIndex[i]]++;
+      }
+      return [totalDust * 5, totalCard];
+    }
+  </script>
+  <script>
+    $(function () {
+      $("input[type='text']").bind("input", function () {
+        if (!/^\d+$/.test(this.value)) {
+          this.value = this.value.replace(/\D/, '');
+        }
+      });
+      $("#unlock").change(function () {
+        $("#hof input[type='text']").prop("disabled", !this.checked);
+      });
+      $(".move-up").click(function () {
+        var this_li = $(this).parent().parent();
+        var prev_li = this_li.prev();
+        if (prev_li.length) {
+          prev_li.before(this_li);
+          if (!this_li.prev().length) {
+            this_li.find('.move-up').addClass('disabled');
+            prev_li.find('.move-up').removeClass('disabled');
+          }
+          if (!prev_li.next().length) {
+            prev_li.find('.move-down').addClass('disabled');
+            this_li.find(".move-down").removeClass('disabled');
+          }
+        }
+      });
+      $(".move-down").click(function () {
+        var this_li = $(this).parent().parent();
+        var next_li = this_li.next();
+        if (next_li.length) {
+          next_li.after(this_li);
+          if (!this_li.next().length) {
+            this_li.find('.move-down').addClass('disabled');
+            next_li.find('.move-down').removeClass('disabled');
+          }
+          if (!next_li.prev().length) {
+            next_li.find('.move-up').addClass('disabled');
+            this_li.find(".move-up").removeClass('disabled');
+          }
+        }
+      });
+      $("#calculate").click(calculate);
+    });
+
+    function calculate() {
+      var hofIds = ["#hof-legendary", "#hof-epic", "#hof-rare", "#hof-common"]
+      var haveIds = ["#have-golden-legendary", "#have-legendary", "#have-golden-epic", "#have-epic", "#have-golden-rare", "#have-rare", "#have-golden-common", "#have-common"]
+
+      var dust = Number($("#have-dust").val());
+      var HoF = $.map(hofIds, s => Number($(s).val()));
+      var have = $.map(haveIds, s => Number($(s).val()));
+      var priority = $.map($("#priority li"), o => $(o).attr('index'));
+      var moreCard = $("#moreCard").prop('checked');
+
+      if (!check(dust, HoF, have)) {
+        return;
+      }
+      var totalDust, totalCard;
+      [totalDust, totalCard] = maxDust(dust, HoF, have, priority, moreCard);
+      new_row(have, totalDust, totalCard);
+    }
+
+    function check(dust, HoF, have) {
+      var cardw = [3200, 1600, 1600, 400, 800, 100, 400, 40];
+      var cardc = [1600, 400, 400, 100, 100, 20, 50, 5];
+      var totalDust = dust + have.map((n, i) => n * cardc[i]).reduce((x, y) => x + y);
+      // 对 0 或足够和全部金卡的尘数不检查，只提醒输入尘数比需求大 10 倍的尘防止迭代次数过多
+      if (totalDust >= 10 * HoF.map((n, i) => n * cardw[i]).reduce((x, y) => x + y)) {
+        alert("奥术之尘过多");
+        return false;
+      }
+      // 卡牌数量不一致，拥有的卡牌比荣誉室的多
+      if (!HoF.map((n, i) => n >= have[2 * i] + have[2 * i + 1]).reduce((x, y) => x && y)) {
+        alert("已有卡牌不应多余荣誉室卡牌！");
+        return false;
+      }
+      return true;
+    }
+    
+    function new_row(have, totalDust, totalCard) {
+      if (!this.row) {
+        this.row = 0;
+      }
+      this.row++;
+      var cardw = [3200, 1600, 1600, 400, 800, 100, 400, 40];
+      var cardc = [1600, 400, 400, 100, 100, 20, 50, 5];
+      var needCard = totalCard.map((n, i) => n - have[i])
+      var row = `              <tr${this.row%2==0 ? "" : " class=\"tr-odd\""}>
+                <td rowspan="2" style="vertical-align: middle;">${this.row}</td>
+                <td>合成</td>
+                <td class="legendary">${needCard[0]}</td>
+                <td class="legendary">${needCard[1]}</td>
+                <td class="epic">${needCard[2]}</td>
+                <td class="epic">${needCard[3]}</td>
+                <td class="rare">${needCard[4]}</td>
+                <td class="rare">${needCard[5]}</td>
+                <td class="common">${needCard[6]}</td>
+                <td class="common">${needCard[7]}</td>
+                <td class="dust">${needCard.map((n, i) => n > 0 ? n * cardw[i] : n * cardc[i]).reduce((x, y) => x + y)}</td>
+              </tr>
+              <tr${this.row%2==0 ? "" : " class=\"tr-odd\""}>
+                <td>总计</td>
+                <td class="legendary">${totalCard[0]}</td>
+                <td class="legendary">${totalCard[1]}</td>
+                <td class="epic">${totalCard[2]}</td>
+                <td class="epic">${totalCard[3]}</td>
+                <td class="rare">${totalCard[4]}</td>
+                <td class="rare">${totalCard[5]}</td>
+                <td class="common">${totalCard[6]}</td>
+                <td class="common">${totalCard[7]}</td>
+                <td class="dust">${totalDust}</td>
+              </tr>`
+      $("#result>tbody").append(row)
+    }
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <h1>炉石传说荣誉室计算器</h1>
+
+    <div class="panel panel-primary">
+      <div class="panel-heading">
+        使用说明
+        <a class="fold badge" href="#instructions" data-toggle="collapse" aria-expanded="false"
+          aria-controls="instructions">展开/折叠</a>
+      </div>
+      <div class="collapse in explain" id="instructions" aria-controls="instructions">
+        <p>本程序用于计算炉石传说荣誉室的返还奥术之尘的合卡方案，如果你不了解奥术之尘的返还规则，请先阅读返还规则一栏。</p>
+        <p>以下为各个主要面版的说明</p>
+        <h3>荣誉室卡牌</h3>
+        <p>该面板输入对应稀有度卡牌的张数 × 可携带上限，默认为 2020 年的荣誉室卡牌数，可通过选中解锁复选框自定义。</p>
+        <blockquote>
+          <p>通过更改数值可以忽略某张卡，只需要将对应稀有度卡牌数减去要排除的张数即可。</p>
+          <p>例如：</p>
+          <ul>
+            <li>我不希望合成<span class="epic">暗影形态</span>，此处史诗卡数量减 2 。</li>
+            <li>我有一张暗影形态不愿分解，此处史诗卡数量减 1。</li>
+          </ul>
+        </blockquote>
+        <h3>已有荣誉室卡牌和奥术之尘</h3>
+        <p>应填入已有的荣誉室卡牌总数及奥术之尘，注意对每张卡牌的最多计入其携带上限且优先计入金色卡牌。</p>
+        <blockquote>
+          <p>例如：我有 2 张普通<span class="epic">暗影形态</span>和 1 张金色<span class="epic">暗影形态</span>，那么金色史诗计入 1 张，普通史诗计入 1 张。</p>
+        </blockquote>
+        <h3>优先级设置</h3>
+        <p>本程序的计算目标是最优解，即返还奥术之尘的最大值；达成最优解的方案可能有多种，本程序无法将其一一列出，但可通过设置优先级获取相应的方案。</p>
+        <blockquote>
+          <p>以 2020 年荣誉室（2 传说，2 史诗，3 稀有，2 普通，基本卡不计，荣誉室卡牌面板值依次为 2, 4, 6, 4）为基础，假设有 3200 尘，无已有卡牌，不同优先级设置得出的方案如下：</p>
+          <ul>
+            <li>优先高稀有度卡牌，不选择最大卡牌张数，推荐：1 金色传说</li>
+            <li>优先低稀有度卡牌，不选择最大卡牌张数，推荐：2 金色稀有，4 金色普通</li>
+            <li>优先高稀有度卡牌，选择最大卡牌张数，推荐：4 史诗，4稀有，3 金色普通</li>
+            <li>优先低稀有度卡牌，选择最大卡牌张数，推荐：3 史诗，4稀有，4 金色普通</li>
+          </ul>
+        </blockquote>
+        <h3>计算结果</h3>
+        <p>每个计算结果分为两行</p>
+        <ul>
+          <li>第一行为合成行，正数代表合成，负数代表分解，奥术之尘列代表你应花费的奥术之尘数量（合成花费 - 分解所得），该值应小于等于你拥有的奥术之尘数</li>
+          <li>第二行为总计行，为你最后应持有的对应稀有度卡牌数，注意如果你在荣誉室卡牌面板排除了某张卡，与你实际持有的卡牌数可能不一致，奥术之尘列代表你持有的卡牌总价值。</li>
+        </ul>
+        <p><strong>注意：合成/分解卡牌前请自行核算以保证没有填写失误、看错结果、程序漏洞等影响</strong></p>
+      </div>
+    </div>
+
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        返还规则
+        <a class="fold badge" href="#rule" data-toggle="collapse" aria-expanded="false" aria-controls="rule">展开/折叠</a>
+      </div>
+      <div class="collapse explain" id="rule" aria-controls="rule">
+        <h3>卡牌类型</h3>
+        <p>炉石传说的卡牌可分为<span class="legendary">传说</span>、<span class="epic">史诗</span>、<span class="rare">稀有</span>、<span
+            class="common">普通</span>、基本五个稀有度。每张卡牌除普通版本外还有金色版本，以下是各个类型卡牌的合成所需或分解所得的奥术之尘的数值（基本卡无法分解/合成，所以不考虑）。</p>
+        <div class="table-responsive">
+          <table class="table text-center">
+            <thead>
+              <tr>
+                <th class="text-center">操作</th>
+                <th class="text-center legendary">金色传说</th>
+                <th class="text-center legendary">传说</th>
+                <th class="text-center epic">金色史诗</th>
+                <th class="text-center epic">史诗</th>
+                <th class="text-center rare">金色稀有</th>
+                <th class="text-center rare">稀有</th>
+                <th class="text-center common">金色普通</th>
+                <th class="text-center common">普通</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>合成</td>
+                <td class="legendary">3200</td>
+                <td class="legendary">1600</td>
+                <td class="epic">1600</td>
+                <td class="epic">400</td>
+                <td class="rare">800</td>
+                <td class="rare">100</td>
+                <td class="common">400</td>
+                <td class="common">40</td>
+              </tr>
+              <tr>
+                <td>分解</td>
+                <td class="legendary">1600</td>
+                <td class="legendary">400</td>
+                <td class="epic">400</td>
+                <td class="epic">100</td>
+                <td class="rare">100</td>
+                <td class="rare">20</td>
+                <td class="common">50</td>
+                <td class="common">5</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>可携带上限</h3>
+        <p>可携带上限指在卡组中，同样卡牌能携带的数量上限，即传说 1 张，其它稀有度 2 张。</p>
+        <blockquote>
+          <p>即使你有两张一样的传说，你也只能携带其中一张，当然不同的传说你带满 30 张也没关系。</p>
+        </blockquote>
+        <h3>返还规则</h3>
+        <p>进入荣誉室的卡牌将无法在标准模式使用，当卡牌进入荣誉室后，你可以获得的奥术之尘等于：</p>
+        <p><strong>你拥有的本次进入荣誉室的每种卡牌（上限为对应的携带上限，优先金卡）× 对应卡牌合成所需奥术之尘的数值 </strong></p>
+        <blockquote>
+          <p>例：如果你有一张金色<span class="legendary">火车王</span>和一张普通<span class="legendary">火车王</span>，其携带上限为
+            1，你将获得等同于合成金色火车王所需的奥术之尘即 3200。</p>
+        </blockquote>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-sm-6 col-md-6">
+        <div class="panel panel-default" id="hof">
+          <div class="panel-heading">
+            荣誉室卡牌
+            <label id="unlock-label" class="checkbox">解锁<input id="unlock" type="checkbox"></label>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <label class="col-xs-6 col-sm-3 legendary">
+                传说
+                <input id="hof-legendary" type="text" class="form-control" value="2" disabled>
+              </label>
+              <label class="col-xs-6 col-sm-3 epic">
+                史诗
+                <input id="hof-epic" type="text" class="form-control" value="4" disabled>
+              </label>
+              <label class="col-xs-6 col-sm-3 rare">
+                稀有
+                <input id="hof-rare" type="text" class="form-control" value="6" disabled>
+              </label>
+              <label class="col-xs-6 col-sm-3 common">
+                普通
+                <input id="hof-common" type="text" class="form-control" value="4" disabled>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="panel panel-default">
+          <div class="panel-heading form-inline">
+            已有荣誉室卡牌和奥术之尘
+          </div>
+          <div class="detail">
+            <div class="row">
+              <label class="col-xs-6 col-sm-3 legendary">
+                金色传说
+                <input id="have-golden-legendary" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+              <label class="col-xs-6 col-sm-3 epic">
+                金色史诗
+                <input id="have-golden-epic" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+              <label class="col-xs-6 col-sm-3 rare">
+                金色稀有
+                <input id="have-golden-rare" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+              <label class="col-xs-6 col-sm-3 common">
+                金色普通
+                <input id="have-golden-common" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+            </div>
+            <div class="row">
+              <label class="col-xs-6 col-sm-3 legendary">
+                传说
+                <input id="have-legendary" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+              <label class="col-xs-6 col-sm-3 epic">
+                史诗
+                <input id="have-epic" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+              <label class="col-xs-6 col-sm-3 rare">
+                稀有
+                <input id="have-rare" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+              <label class="col-xs-6 col-sm-3 common">
+                普通
+                <input id="have-common" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+            </div>
+            <div class="row">
+              <label class="col-xs-12 dust">
+                奥术之尘
+                <input id="have-dust" type="text" class="form-control" value="0" placeholder="0">
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-md-6">
+        <div class="panel panel-default">
+          <div class="panel-heading">
+            优先级设置
+          </div>
+          <div class="detail">
+            <div class="row">
+              <div class="col-sm-12">
+                <ul id="priority" class="list-group">
+                  <li class="list-group-item legendary" index="0">
+                    传说
+                    <span class="sort-link">
+                      <span class="move-up glyphicon glyphicon-arrow-up disabled"></span>
+                      <span class="move-down glyphicon glyphicon-arrow-down"></span>
+                    </span>
+                  </li>
+                  <li class="list-group-item epic" index="1">
+                    史诗
+                    <span class="sort-link">
+                      <span class="move-up glyphicon glyphicon-arrow-up"></span>
+                      <span class="move-down glyphicon glyphicon-arrow-down"></span>
+                    </span>
+                  </li>
+                  <li class="list-group-item rare" index="2">
+                    稀有
+                    <span class="sort-link">
+                      <span class="move-up glyphicon glyphicon-arrow-up"></span>
+                      <span class="move-down glyphicon glyphicon-arrow-down"></span>
+                    </span>
+                  </li>
+                  <li class="list-group-item common" index="3">
+                    普通
+                    <span class="sort-link">
+                      <span class="move-up glyphicon glyphicon-arrow-up"></span>
+                      <span class="move-down glyphicon glyphicon-arrow-down disabled"></span>
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-12 text-center">
+                <label class="checkbox"><input id="moreCard" type="checkbox">最大卡牌张数</label>
+                <button id="calculate" class="btn btn-primary">计算</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-sm-12">
+        <div class="panel panel-default">
+          <div class="panel-heading">
+            结果
+          </div>
+          <div class="table-responsive">
+            <table id="result" class="table table-bordered">
+              <tr>
+                <th>编号</th>
+                <th>操作</th>
+                <th class="legendary">金色传说</th>
+                <th class="legendary">传说</th>
+                <th class="epic">金色史诗</th>
+                <th class="epic">史诗</th>
+                <th class="rare">金色稀有</th>
+                <th class="rare">稀有</th>
+                <th class="common">金色普通</th>
+                <th class="common">普通</th>
+                <th class="dust">奥术之尘</th>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
